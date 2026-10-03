@@ -1,0 +1,86 @@
+<Window x:Class="LawCaseManagement.Wpf.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:LawCaseManagement.Wpf.Views"
+        xmlns:vm="clr-namespace:LawCaseManagement.Wpf.ViewModels"
+        Title="Justice Flow — Case Management" 
+        Height="720" Width="1120"
+        MinHeight="600" MinWidth="900"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BackgroundBrush}">
+
+    <Window.Resources>
+        <!-- DataTemplates linking ViewModels to Views -->
+        <DataTemplate DataType="{x:Type vm:DashboardViewModel}">
+            <views:DashboardView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:CasesViewModel}">
+            <views:CasesView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:ClientsViewModel}">
+            <views:ClientsView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:TasksViewModel}">
+            <views:TasksView />
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:AdminViewModel}">
+            <views:AdminView />
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Sidebar -->
+        <Border Grid.Column="0" Background="{StaticResource SidebarBackgroundBrush}" 
+                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+            <DockPanel>
+                <!-- App Brand -->
+                <StackPanel DockPanel.Dock="Top" Margin="18,24,18,20">
+                    <TextBlock Text="⚖ JUSTICE FLOW" FontSize="16" FontWeight="Bold" Foreground="{StaticResource PrimaryBrush}" />
+                    <TextBlock Text="{Binding CurrentUser.FullName}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" Margin="0,6,0,0"/>
+                    <Border Background="{StaticResource AccentBrush}" CornerRadius="3" Padding="6,2" HorizontalAlignment="Left" Margin="0,4,0,0">
+                        <TextBlock Text="{Binding CurrentUser.Role}" FontSize="10" FontWeight="SemiBold" Foreground="#FFFFFF" HorizontalAlignment="Center" />
+                    </Border>
+                </StackPanel>
+
+                <!-- Logout at Bottom -->
+                <Button DockPanel.Dock="Bottom" Content="Sign Out" 
+                        Command="{Binding LogoutCommand}"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Margin="16,8,16,20" Height="34"/>
+
+                <!-- Nav Items -->
+                <StackPanel Margin="10,0,10,0">
+                    <RadioButton Content="🏠  Dashboard" IsChecked="True"
+                                 Command="{Binding ShowDashboardCommand}"
+                                 Style="{StaticResource SidebarButtonStyle}"
+                                 FontSize="13"/>
+                    <RadioButton Content="📁  Cases"
+                                 Command="{Binding ShowCasesCommand}"
+                                 Style="{StaticResource SidebarButtonStyle}"
+                                 FontSize="13"/>
+                    <RadioButton Content="👥  Clients"
+                                 Command="{Binding ShowClientsCommand}"
+                                 Style="{StaticResource SidebarButtonStyle}"
+                                 FontSize="13"/>
+                    <RadioButton Content="✅  Tasks"
+                                 Command="{Binding ShowTasksCommand}"
+                                 Style="{StaticResource SidebarButtonStyle}"
+                                 FontSize="13"/>
+                    <RadioButton Content="⚙  Admin Panel"
+                                 Command="{Binding ShowAdminCommand}"
+                                 Style="{StaticResource SidebarButtonStyle}"
+                                 Visibility="{Binding IsAdmin, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                 FontSize="13"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Main Content Area -->
+        <ContentControl Grid.Column="1" Content="{Binding CurrentView}" />
+    </Grid>
+</Window>
