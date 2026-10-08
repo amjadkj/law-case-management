@@ -15,6 +15,7 @@ namespace LawCaseManagement.Wpf.Views
         {
             InitializeComponent();
             _serviceProvider = serviceProvider;
+            viewModel.OnLogout = Logout;
             DataContext = viewModel;
 
             _sessionTimeoutManager = new SessionTimeoutManager(TimeSpan.FromMinutes(15), Logout);

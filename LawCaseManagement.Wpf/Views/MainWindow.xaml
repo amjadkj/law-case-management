@@ -3,11 +3,11 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:LawCaseManagement.Wpf.Views"
         xmlns:vm="clr-namespace:LawCaseManagement.Wpf.ViewModels"
-        Title="Justice Flow — Case Management" 
-        Height="720" Width="1120"
-        MinHeight="600" MinWidth="900"
+        Title="Justice Flow — Legal Case Management" 
+        Height="780" Width="1200"
+        MinHeight="640" MinWidth="960"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource BackgroundBrush}">
+        Background="{DynamicResource BackgroundBrush}">
 
     <Window.Resources>
         <!-- DataTemplates linking ViewModels to Views -->
@@ -29,58 +29,258 @@
     </Window.Resources>
 
     <Grid>
+        <!-- Main Layout Grid: Left Sidebar + Right Content Area -->
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="{Binding SidebarWidth, FallbackValue=220}" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <!-- Sidebar -->
-        <Border Grid.Column="0" Background="{StaticResource SidebarBackgroundBrush}" 
-                BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
-            <DockPanel>
-                <!-- App Brand -->
-                <StackPanel DockPanel.Dock="Top" Margin="18,24,18,20">
-                    <TextBlock Text="⚖ JUSTICE FLOW" FontSize="16" FontWeight="Bold" Foreground="{StaticResource PrimaryBrush}" />
-                    <TextBlock Text="{Binding CurrentUser.FullName}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" Margin="0,6,0,0"/>
-                    <Border Background="{StaticResource AccentBrush}" CornerRadius="3" Padding="6,2" HorizontalAlignment="Left" Margin="0,4,0,0">
-                        <TextBlock Text="{Binding CurrentUser.Role}" FontSize="10" FontWeight="SemiBold" Foreground="#FFFFFF" HorizontalAlignment="Center" />
-                    </Border>
+        <!-- ==================== SIDEBAR (§2.4) ==================== -->
+        <Border Grid.Column="0" 
+                Background="{DynamicResource SurfaceBrush}" 
+                BorderBrush="{DynamicResource BorderBrush}" 
+                BorderThickness="0,0,1,0">
+            <DockPanel LastChildFill="True">
+
+                <!-- 1. Header: Logo, App Name, and Collapse Toggle -->
+                <Border DockPanel.Dock="Top" 
+                        BorderBrush="{DynamicResource BorderBrush}" 
+                        BorderThickness="0,0,0,1" 
+                        Padding="14,16,12,16">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Logo Mark (Always visible) -->
+                        <TextBlock Grid.Column="0" Text="⚖" FontSize="20" VerticalAlignment="Center" 
+                                   Foreground="{DynamicResource PrimaryBrush}" Margin="0,0,8,0" />
+
+                        <!-- App Name (Hides when collapsed) -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                                    Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                            <TextBlock Text="JUSTICE FLOW" FontSize="13" FontWeight="Bold" 
+                                       Foreground="{DynamicResource PrimaryBrush}"/>
+                            <TextBlock Text="Case Management" FontSize="10" 
+                                       Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        </StackPanel>
+
+                        <!-- Toggle Button (§2.4) -->
+                        <Button Grid.Column="2" 
+                                Command="{Binding ToggleSidebarCommand}"
+                                ToolTip="{Binding SidebarToggleTooltip}"
+                                Style="{DynamicResource IconButtonStyle}"
+                                Width="28" Height="28">
+                            <TextBlock Text="{Binding SidebarToggleIcon}" FontSize="11" 
+                                       Foreground="{DynamicResource TextSecondaryBrush}" HorizontalAlignment="Center"/>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- 2. Bottom Section: Sign Out (§2.4) -->
+                <StackPanel DockPanel.Dock="Bottom" Margin="10,8,10,14">
+                    <Separator Background="{DynamicResource BorderBrush}" Margin="0,0,0,10"/>
+                    <Button Command="{Binding PromptSignOutCommand}"
+                            Style="{DynamicResource SecondaryButtonStyle}"
+                            Height="38" Padding="8,0"
+                            ToolTip="Sign Out of Justice Flow">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <TextBlock Text="🚪" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Sign Out" FontSize="13" VerticalAlignment="Center"
+                                       Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
-                <!-- Logout at Bottom -->
-                <Button DockPanel.Dock="Bottom" Content="Sign Out" 
-                        Command="{Binding LogoutCommand}"
-                        Style="{StaticResource SecondaryButtonStyle}"
-                        Margin="16,8,16,20" Height="34"/>
+                <!-- 3. Navigation Items (§2.4) -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="8,12,8,0">
+                    <StackPanel>
+                        <!-- Dashboard -->
+                        <RadioButton Command="{Binding ShowDashboardCommand}"
+                                     IsChecked="{Binding CurrentSection, ConverterParameter=Dashboard, Mode=OneWay}"
+                                     Style="{DynamicResource SidebarNavButtonStyle}"
+                                     ToolTip="Dashboard">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="🏠" FontSize="16" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Dashboard" VerticalAlignment="Center"
+                                           Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                            </StackPanel>
+                        </RadioButton>
 
-                <!-- Nav Items -->
-                <StackPanel Margin="10,0,10,0">
-                    <RadioButton Content="🏠  Dashboard" IsChecked="True"
-                                 Command="{Binding ShowDashboardCommand}"
-                                 Style="{StaticResource SidebarButtonStyle}"
-                                 FontSize="13"/>
-                    <RadioButton Content="📁  Cases"
-                                 Command="{Binding ShowCasesCommand}"
-                                 Style="{StaticResource SidebarButtonStyle}"
-                                 FontSize="13"/>
-                    <RadioButton Content="👥  Clients"
-                                 Command="{Binding ShowClientsCommand}"
-                                 Style="{StaticResource SidebarButtonStyle}"
-                                 FontSize="13"/>
-                    <RadioButton Content="✅  Tasks"
-                                 Command="{Binding ShowTasksCommand}"
-                                 Style="{StaticResource SidebarButtonStyle}"
-                                 FontSize="13"/>
-                    <RadioButton Content="⚙  Admin Panel"
-                                 Command="{Binding ShowAdminCommand}"
-                                 Style="{StaticResource SidebarButtonStyle}"
-                                 Visibility="{Binding IsAdmin, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                 FontSize="13"/>
-                </StackPanel>
+                        <!-- Cases -->
+                        <RadioButton Command="{Binding ShowCasesCommand}"
+                                     IsChecked="{Binding CurrentSection, ConverterParameter=Cases, Mode=OneWay}"
+                                     Style="{DynamicResource SidebarNavButtonStyle}"
+                                     ToolTip="Cases">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="📁" FontSize="16" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Cases" VerticalAlignment="Center"
+                                           Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                            </StackPanel>
+                        </RadioButton>
+
+                        <!-- Clients -->
+                        <RadioButton Command="{Binding ShowClientsCommand}"
+                                     IsChecked="{Binding CurrentSection, ConverterParameter=Clients, Mode=OneWay}"
+                                     Style="{DynamicResource SidebarNavButtonStyle}"
+                                     ToolTip="Clients">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="👥" FontSize="16" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Clients" VerticalAlignment="Center"
+                                           Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                            </StackPanel>
+                        </RadioButton>
+
+                        <!-- Tasks -->
+                        <RadioButton Command="{Binding ShowTasksCommand}"
+                                     IsChecked="{Binding CurrentSection, ConverterParameter=Tasks, Mode=OneWay}"
+                                     Style="{DynamicResource SidebarNavButtonStyle}"
+                                     ToolTip="Tasks">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="✅" FontSize="16" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Tasks" VerticalAlignment="Center"
+                                           Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                            </StackPanel>
+                        </RadioButton>
+
+                        <!-- Admin Panel (Admin role only) -->
+                        <RadioButton Command="{Binding ShowAdminCommand}"
+                                     IsChecked="{Binding CurrentSection, ConverterParameter=Admin, Mode=OneWay}"
+                                     Style="{DynamicResource SidebarNavButtonStyle}"
+                                     Visibility="{Binding IsAdmin, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                     ToolTip="Admin Panel">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="⚙" FontSize="16" Width="24" TextAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Admin Panel" VerticalAlignment="Center"
+                                           Visibility="{Binding IsSidebarCollapsed, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
+                            </StackPanel>
+                        </RadioButton>
+                    </StackPanel>
+                </ScrollViewer>
             </DockPanel>
         </Border>
 
-        <!-- Main Content Area -->
-        <ContentControl Grid.Column="1" Content="{Binding CurrentView}" />
+        <!-- ==================== MAIN CONTENT & TOP BAR ==================== -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" /> <!-- Top Header Bar & Sync Banner -->
+                <RowDefinition Height="*" />    <!-- Active View Area -->
+            </Grid.RowDefinitions>
+
+            <!-- Top Header & Global Status Bar (§4 & §2.8) -->
+            <StackPanel Grid.Row="0">
+                <!-- Offline / Sync Warning Banner (Only visible when offline or syncing or conflicts) -->
+                <Border Background="{DynamicResource WarningSoftBrush}" 
+                        BorderBrush="{DynamicResource WarningBrush}" 
+                        BorderThickness="0,0,0,1" 
+                        Padding="16,8"
+                        Visibility="{Binding ShowSyncBanner, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding SyncBannerMessage}" 
+                                       Foreground="{DynamicResource WarningBrush}" 
+                                       FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Main Header Bar -->
+                <Border Background="{DynamicResource SurfaceBrush}" 
+                        BorderBrush="{DynamicResource BorderBrush}" 
+                        BorderThickness="0,0,0,1" 
+                        Padding="24,10,24,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Left: Status Breadcrumb / Connection Info -->
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Background="{DynamicResource SurfaceAltBrush}" 
+                                    CornerRadius="12" Padding="10,4" Margin="0,0,12,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding SyncStatusDot}" FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding SyncStatusText}" FontSize="12" 
+                                               Foreground="{DynamicResource TextSecondaryBrush}" FontWeight="Medium" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Right: Theme Toggle & User Info -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- Theme Toggle (§2.8) -->
+                            <Button Command="{Binding ToggleThemeCommand}"
+                                    ToolTip="{Binding Theme.ThemeTooltip}"
+                                    Style="{DynamicResource IconButtonStyle}"
+                                    Width="36" Height="36" Margin="0,0,16,0">
+                                <TextBlock Text="{Binding Theme.ThemeIcon}" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Button>
+
+                            <!-- User Info Pill -->
+                            <Border Background="{DynamicResource SurfaceAltBrush}" CornerRadius="16" Padding="12,5">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="👤" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding CurrentUser.FullName}" FontSize="12" FontWeight="SemiBold" 
+                                               Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <Border Background="{DynamicResource PrimarySoftBrush}" CornerRadius="8" Padding="6,2">
+                                        <TextBlock Text="{Binding CurrentUser.Role}" FontSize="10" FontWeight="Bold" 
+                                                   Foreground="{DynamicResource PrimaryBrush}"/>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <!-- Main Content Area -->
+            <ContentControl Grid.Row="1" Content="{Binding CurrentView}" />
+        </Grid>
+
+        <!-- ==================== SIGN OUT CONFIRMATION MODAL (§2.4) ==================== -->
+        <Grid Grid.ColumnSpan="2" 
+              Style="{DynamicResource ModalOverlayStyle}"
+              Visibility="{Binding IsSignOutModalOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Border Style="{DynamicResource ModalCardStyle}" 
+                    Width="400" 
+                    VerticalAlignment="Center" 
+                    HorizontalAlignment="Center">
+                <StackPanel>
+                    <!-- Header -->
+                    <Grid Margin="0,0,0,16">
+                        <TextBlock Text="Confirm Sign Out" FontSize="18" FontWeight="SemiBold" 
+                                   Foreground="{DynamicResource TextPrimaryBrush}"/>
+                        <Button HorizontalAlignment="Right" 
+                                Command="{Binding CancelSignOutCommand}"
+                                Style="{DynamicResource IconButtonStyle}"
+                                ToolTip="Close">
+                            <TextBlock Text="✕" FontSize="14" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        </Button>
+                    </Grid>
+
+                    <!-- Body -->
+                    <TextBlock Text="Are you sure you want to sign out of Justice Flow? Any unsaved local edits will be preserved in your local cache." 
+                               TextWrapping="Wrap" 
+                               FontSize="13" 
+                               Foreground="{DynamicResource TextSecondaryBrush}" 
+                               Margin="0,0,0,24" LineHeight="20"/>
+
+                    <!-- Footer Actions -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Cancel" 
+                                Command="{Binding CancelSignOutCommand}"
+                                Style="{DynamicResource SecondaryButtonStyle}"
+                                Margin="0,0,10,0" Width="90"/>
+                        <Button Content="Sign Out" 
+                                Command="{Binding ConfirmSignOutCommand}"
+                                Style="{DynamicResource DangerButtonStyle}"
+                                Width="100"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

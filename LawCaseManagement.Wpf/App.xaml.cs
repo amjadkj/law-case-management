@@ -72,24 +72,44 @@ namespace LawCaseManagement.Wpf
                         {
                             appConfig.Database.Provider = dbSection["Provider"] ?? "Sqlite";
                             appConfig.Database.ConnectionString = dbSection["ConnectionString"] ?? "Data Source=law_case_management.db";
+                            appConfig.Database.SqlServerConnectionString = dbSection["SqlServerConnectionString"] ?? string.Empty;
+                            appConfig.Database.SqliteCacheConnectionString = dbSection["SqliteCacheConnectionString"] ?? "Data Source=law_case_management_cache.db";
                         }
                         var docSection = context.Configuration.GetSection("Documents");
                         if (docSection.Exists())
                         {
                             appConfig.Documents.SharedFolder = docSection["SharedFolder"] ?? string.Empty;
                         }
+                        var syncSection = context.Configuration.GetSection("Sync");
+                        if (syncSection.Exists())
+                        {
+                            if (bool.TryParse(syncSection["Enabled"], out bool syncEnabled))
+                                appConfig.Sync.Enabled = syncEnabled;
+                            if (int.TryParse(syncSection["SyncIntervalSeconds"], out int interval))
+                                appConfig.Sync.SyncIntervalSeconds = interval;
+                            if (int.TryParse(syncSection["MaxRetries"], out int retries))
+                                appConfig.Sync.MaxRetries = retries;
+                        }
                         services.AddSingleton(appConfig);
 
-                        // 2. Register DbContextFactory
+                        // 2. Register DbContextFactory — supports SqlServer and Sqlite providers
+                        //    Connection strings may be DPAPI-encrypted; DecryptOrPassthrough handles both cases.
                         services.AddDbContextFactory<CaseDbContext>(options =>
                         {
                             if (appConfig.Database.Provider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase))
                             {
-                                options.UseSqlServer(appConfig.Database.ConnectionString);
+                                string connStr = CredentialProtector.DecryptOrPassthrough(
+                                    !string.IsNullOrEmpty(appConfig.Database.SqlServerConnectionString)
+                                        ? appConfig.Database.SqlServerConnectionString
+                                        : appConfig.Database.ConnectionString);
+
+                                options.UseSqlServer(connStr);
+                                Log.Information("Database provider: SQL Server");
                             }
                             else
                             {
                                 options.UseSqlite(appConfig.Database.ConnectionString);
+                                Log.Information("Database provider: SQLite");
                             }
                         });
 
@@ -125,6 +145,9 @@ namespace LawCaseManagement.Wpf
                     var initializer = scope.ServiceProvider.GetRequiredService<DatabaseInitializer>();
                     initializer.Initialize();
                 }
+
+                // Initialize Theme
+                ThemeManager.Instance.Initialize();
 
                 // Show Login Window
                 var loginWindow = _host.Services.GetRequiredService<LoginWindow>();

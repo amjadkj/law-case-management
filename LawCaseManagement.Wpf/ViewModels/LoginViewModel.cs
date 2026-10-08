@@ -10,6 +10,7 @@ namespace LawCaseManagement.Wpf.ViewModels
         private string _username = string.Empty;
         private string _errorMessage = string.Empty;
         private readonly IAuthService _authService;
+        private readonly AppConfig? _appConfig;
         private Action? _onLoginSuccess;
 
         public string Username
@@ -24,13 +25,23 @@ namespace LawCaseManagement.Wpf.ViewModels
             set => SetProperty(ref _errorMessage, value);
         }
 
+        public bool IsOnline => _appConfig?.Database.Provider.Equals("SqlServer", StringComparison.OrdinalIgnoreCase) == true;
+        public string ConnectionStatusText => IsOnline ? "Connected to server" : "Offline mode — using local data";
+        public string ConnectionStatusDot => IsOnline ? "🟢" : "🟡";
+
         public ICommand LoginCommand { get; }
 
-        public LoginViewModel(IAuthService? authService = null, Action? onLoginSuccess = null)
+        public LoginViewModel(IAuthService? authService = null, Action? onLoginSuccess = null, AppConfig? appConfig = null)
         {
             _authService = authService ?? new AuthService();
+            _appConfig = appConfig;
             _onLoginSuccess = onLoginSuccess;
             LoginCommand = new RelayCommand(ExecuteLogin);
+        }
+
+        public LoginViewModel(IAuthService? authService, AppConfig? appConfig, Action? onLoginSuccess)
+            : this(authService, onLoginSuccess, appConfig)
+        {
         }
 
         public void SetLoginCallback(Action onLoginSuccess)

@@ -12,6 +12,8 @@ namespace LawCaseManagement.Core
         public DbSet<Task> Tasks { get; set; }
         public DbSet<Document> Documents { get; set; }
         public DbSet<AuditLog> AuditLogs { get; set; }
+        public DbSet<SyncChangeLog> SyncChangeLogs { get; set; }
+        public DbSet<SyncConflict> SyncConflicts { get; set; }
 
         // Parameterless constructor kept for EF tooling (migrations)
         public CaseDbContext()
@@ -21,6 +23,12 @@ namespace LawCaseManagement.Core
         public CaseDbContext(DbContextOptions<CaseDbContext> options) : base(options)
         {
         }
+
+        /// <summary>
+        /// Returns true when this context is connected to SQL Server (not SQLite).
+        /// Used by services to adjust behavior per provider.
+        /// </summary>
+        public bool IsSqlServer => Database.ProviderName?.Contains("SqlServer", StringComparison.OrdinalIgnoreCase) == true;
 
         /// <summary>
         /// Fallback configuration used only by EF tooling (dotnet ef migrations).
@@ -43,6 +51,8 @@ namespace LawCaseManagement.Core
             modelBuilder.Entity<Task>().HasKey(t => t.TaskID);
             modelBuilder.Entity<Document>().HasKey(d => d.DocumentID);
             modelBuilder.Entity<AuditLog>().HasKey(al => al.LogID);
+            modelBuilder.Entity<SyncChangeLog>().HasKey(s => s.SyncChangeLogID);
+            modelBuilder.Entity<SyncConflict>().HasKey(s => s.SyncConflictID);
 
             // ── Unique constraint on FileNumber ───────────────────────────────
             modelBuilder.Entity<Case>()
@@ -111,7 +121,51 @@ namespace LawCaseManagement.Core
                 .HasForeignKey(al => al.UserID)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            // ── Concurrency tokens (RowVersion) ───────────────────────────────
+            // The [Timestamp] attribute on RowVersion is automatically mapped:
+            //   - SQL Server → rowversion column (auto-managed by the engine)
+            //   - SQLite → BLOB column (must be managed manually in code)
+            //
+            // For SQLite, we configure RowVersion as a concurrency token but
+            // exclude it from being a SQL Server-style auto-increment timestamp.
+            // The DatabaseProvider-specific configuration is handled below.
+
+            ConfigureSyncableEntity<Case>(modelBuilder);
+            ConfigureSyncableEntity<Client>(modelBuilder);
+            ConfigureSyncableEntity<Task>(modelBuilder);
+            ConfigureSyncableEntity<Document>(modelBuilder);
+
+            // ── SyncChangeLog indexes ─────────────────────────────────────────
+            modelBuilder.Entity<SyncChangeLog>()
+                .HasIndex(s => new { s.IsSynced, s.ChangedAtUtc })
+                .HasDatabaseName("IX_SyncChangeLog_Pending");
+
+            modelBuilder.Entity<SyncChangeLog>()
+                .HasIndex(s => new { s.EntityType, s.RecordId })
+                .HasDatabaseName("IX_SyncChangeLog_Entity");
+
+            // ── SyncConflict indexes ──────────────────────────────────────────
+            modelBuilder.Entity<SyncConflict>()
+                .HasIndex(s => s.Resolution)
+                .HasDatabaseName("IX_SyncConflict_Resolution");
+
             base.OnModelCreating(modelBuilder);
+        }
+
+        /// <summary>
+        /// Configures the RowVersion property as a concurrency token for the given entity.
+        /// Works for both SQL Server (auto-managed rowversion) and SQLite (manual BLOB).
+        /// </summary>
+        private static void ConfigureSyncableEntity<T>(ModelBuilder modelBuilder) where T : class, ISyncableEntity
+        {
+            modelBuilder.Entity<T>()
+                .Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+
+            modelBuilder.Entity<T>()
+                .Property(e => e.LastModifiedUtc)
+                .HasDefaultValueSql("GETUTCDATE()");
         }
     }
 }

@@ -15,20 +15,75 @@ namespace LawCaseManagement.Wpf.ViewModels
         private readonly ICaseService _caseService;
         private readonly IDbContextFactory<CaseDbContext>? _contextFactory;
 
+        private string _searchQuery = string.Empty;
         private string _statusFilter = "All";
         private User? _selectedStaffFilter;
         private Case? _selectedCaseFilter;
         private CoreTask? _selectedTask;
 
-        // New Task Form
-        private string _newTaskTitle = string.Empty;
-        private Case? _newTaskSelectedCase;
-        private User? _newTaskAssignedTo;
-        private DateTime _newTaskDueDate = DateTime.Today.AddDays(7);
+        // Modal states (§2.7)
+        private bool _isTaskModalOpen;
+        private bool _isFilterModalOpen;
+        private bool _isEditMode;
+
+        // Form Fields
+        private string _formTitle = string.Empty;
+        private Case? _formSelectedCase;
+        private User? _formAssignedTo;
+        private string _formStatus = TaskStatuses.Pending;
+        private DateTime _formDueDate = DateTime.Today.AddDays(7);
 
         public ObservableCollection<CoreTask> TasksList { get; } = new ObservableCollection<CoreTask>();
         public ObservableCollection<User> StaffList { get; } = new ObservableCollection<User>();
         public ObservableCollection<Case> CasesList { get; } = new ObservableCollection<Case>();
+
+        public CoreTask? SelectedTask
+        {
+            get => _selectedTask;
+            set => SetProperty(ref _selectedTask, value);
+        }
+
+        // Modals
+        public bool IsTaskModalOpen
+        {
+            get => _isTaskModalOpen;
+            set => SetProperty(ref _isTaskModalOpen, value);
+        }
+
+        public bool IsFilterModalOpen
+        {
+            get => _isFilterModalOpen;
+            set => SetProperty(ref _isFilterModalOpen, value);
+        }
+
+        public bool IsEditMode
+        {
+            get => _isEditMode;
+            set
+            {
+                if (SetProperty(ref _isEditMode, value))
+                {
+                    OnPropertyChanged(nameof(ModalTitle));
+                    OnPropertyChanged(nameof(SaveButtonText));
+                }
+            }
+        }
+
+        public string ModalTitle => IsEditMode ? $"Task Details: {FormTitle}" : "New Task";
+        public string SaveButtonText => IsEditMode ? "Save Changes" : "Create Task";
+
+        // Scoped Search & Filter (§2.5)
+        public string SearchQuery
+        {
+            get => _searchQuery;
+            set
+            {
+                if (SetProperty(ref _searchQuery, value))
+                {
+                    LoadTasks();
+                }
+            }
+        }
 
         public string StatusFilter
         {
@@ -37,7 +92,7 @@ namespace LawCaseManagement.Wpf.ViewModels
             {
                 if (SetProperty(ref _statusFilter, value))
                 {
-                    LoadTasks();
+                    OnPropertyChanged(nameof(HasActiveFilters));
                 }
             }
         }
@@ -49,7 +104,7 @@ namespace LawCaseManagement.Wpf.ViewModels
             {
                 if (SetProperty(ref _selectedStaffFilter, value))
                 {
-                    LoadTasks();
+                    OnPropertyChanged(nameof(HasActiveFilters));
                 }
             }
         }
@@ -61,26 +116,32 @@ namespace LawCaseManagement.Wpf.ViewModels
             {
                 if (SetProperty(ref _selectedCaseFilter, value))
                 {
-                    LoadTasks();
+                    OnPropertyChanged(nameof(HasActiveFilters));
                 }
             }
         }
 
-        public CoreTask? SelectedTask
-        {
-            get => _selectedTask;
-            set => SetProperty(ref _selectedTask, value);
-        }
+        public bool HasActiveFilters => 
+            (StatusFilter != "All" && !string.IsNullOrEmpty(StatusFilter)) ||
+            SelectedStaffFilter != null ||
+            SelectedCaseFilter != null;
 
         // Form Bindings
-        public string NewTaskTitle { get => _newTaskTitle; set => SetProperty(ref _newTaskTitle, value); }
-        public Case? NewTaskSelectedCase { get => _newTaskSelectedCase; set => SetProperty(ref _newTaskSelectedCase, value); }
-        public User? NewTaskAssignedTo { get => _newTaskAssignedTo; set => SetProperty(ref _newTaskAssignedTo, value); }
-        public DateTime NewTaskDueDate { get => _newTaskDueDate; set => SetProperty(ref _newTaskDueDate, value); }
+        public string FormTitle { get => _formTitle; set => SetProperty(ref _formTitle, value); }
+        public Case? FormSelectedCase { get => _formSelectedCase; set => SetProperty(ref _formSelectedCase, value); }
+        public User? FormAssignedTo { get => _formAssignedTo; set => SetProperty(ref _formAssignedTo, value); }
+        public string FormStatus { get => _formStatus; set => SetProperty(ref _formStatus, value); }
+        public DateTime FormDueDate { get => _formDueDate; set => SetProperty(ref _formDueDate, value); }
 
+        // Commands
+        public ICommand SearchCommand { get; }
+        public ICommand ToggleFilterModalCommand { get; }
+        public ICommand ApplyFiltersCommand { get; }
+        public ICommand ClearFiltersCommand { get; }
+        public ICommand OpenCreateModalCommand { get; }
+        public ICommand CloseTaskModalCommand { get; }
+        public ICommand SaveTaskCommand { get; }
         public ICommand CycleStatusCommand { get; }
-        public ICommand RefreshTasksCommand { get; }
-        public ICommand CreateTaskCommand { get; }
         public ICommand DeleteTaskCommand { get; }
 
         public TasksViewModel(
@@ -92,9 +153,16 @@ namespace LawCaseManagement.Wpf.ViewModels
             _taskService = taskService ?? new TaskService(contextFactory);
             _caseService = caseService ?? new CaseService(contextFactory);
 
+            SearchCommand = new RelayCommand(LoadTasks);
+            ToggleFilterModalCommand = new RelayCommand(() => IsFilterModalOpen = !IsFilterModalOpen);
+            ApplyFiltersCommand = new RelayCommand(() => { IsFilterModalOpen = false; LoadTasks(); });
+            ClearFiltersCommand = new RelayCommand(ResetFilters);
+
+            OpenCreateModalCommand = new RelayCommand(OpenCreateModal);
+            CloseTaskModalCommand = new RelayCommand(() => IsTaskModalOpen = false);
+            SaveTaskCommand = new RelayCommand(ExecuteSaveTask);
+
             CycleStatusCommand = new RelayCommand(ExecuteCycleStatus);
-            RefreshTasksCommand = new RelayCommand(LoadTasks);
-            CreateTaskCommand = new RelayCommand(ExecuteCreateTask);
             DeleteTaskCommand = new RelayCommand(ExecuteDeleteTask);
 
             LoadStaticData();
@@ -121,11 +189,42 @@ namespace LawCaseManagement.Wpf.ViewModels
             }
         }
 
+        public void OpenCreateModal()
+        {
+            ClearForm();
+            IsEditMode = false;
+            SelectedTask = null;
+            IsTaskModalOpen = true;
+        }
+
+        public void OpenEditModal(CoreTask t)
+        {
+            SelectedTask = t;
+            IsEditMode = true;
+            FormTitle = t.Title;
+            FormSelectedCase = CasesList.FirstOrDefault(c => c.CaseID == t.CaseID);
+            FormAssignedTo = StaffList.FirstOrDefault(s => s.UserID == t.AssignedToID);
+            FormStatus = t.Status;
+            FormDueDate = t.DueDate;
+            IsTaskModalOpen = true;
+        }
+
         public void LoadTasks()
         {
             int? caseId = SelectedCaseFilter?.CaseID;
             int? assignedToId = SelectedStaffFilter?.UserID;
             var list = _taskService.GetTasks(caseId, assignedToId, StatusFilter);
+
+            if (!string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                string q = SearchQuery.ToLowerInvariant();
+                list = list.Where(t => 
+                    (t.Title != null && t.Title.ToLowerInvariant().Contains(q)) ||
+                    (t.Case != null && t.Case.FileNumber != null && t.Case.FileNumber.ToLowerInvariant().Contains(q)) ||
+                    (t.Case != null && t.Case.Title != null && t.Case.Title.ToLowerInvariant().Contains(q)) ||
+                    (t.AssignedTo != null && t.AssignedTo.FullName != null && t.AssignedTo.FullName.ToLowerInvariant().Contains(q))
+                ).ToList();
+            }
 
             TasksList.Clear();
             foreach (var t in list)
@@ -134,9 +233,40 @@ namespace LawCaseManagement.Wpf.ViewModels
             }
         }
 
+        private void ResetFilters()
+        {
+            SearchQuery = string.Empty;
+            StatusFilter = "All";
+            SelectedStaffFilter = null;
+            SelectedCaseFilter = null;
+            IsFilterModalOpen = false;
+            LoadTasks();
+        }
+
+        private void ClearForm()
+        {
+            FormTitle = string.Empty;
+            FormSelectedCase = null;
+            FormAssignedTo = null;
+            FormStatus = TaskStatuses.Pending;
+            FormDueDate = DateTime.Today.AddDays(7);
+        }
+
+        private void ExecuteSaveTask()
+        {
+            if (IsEditMode)
+            {
+                ExecuteUpdateTask();
+            }
+            else
+            {
+                ExecuteCreateTask();
+            }
+        }
+
         private void ExecuteCreateTask()
         {
-            if (string.IsNullOrWhiteSpace(NewTaskTitle) || NewTaskSelectedCase == null || NewTaskAssignedTo == null)
+            if (string.IsNullOrWhiteSpace(FormTitle) || FormSelectedCase == null || FormAssignedTo == null)
             {
                 MessageBox.Show("Please fill out all required fields: Task Title, Case, and Assigned Staff.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -144,25 +274,57 @@ namespace LawCaseManagement.Wpf.ViewModels
 
             var newTask = new CoreTask
             {
-                CaseID = NewTaskSelectedCase.CaseID,
-                Title = NewTaskTitle,
-                AssignedToID = NewTaskAssignedTo.UserID,
-                DueDate = NewTaskDueDate,
-                Status = TaskStatuses.Pending
+                CaseID = FormSelectedCase.CaseID,
+                Title = FormTitle,
+                AssignedToID = FormAssignedTo.UserID,
+                DueDate = FormDueDate,
+                Status = FormStatus
             };
 
             bool success = _taskService.CreateTask(newTask);
             if (success)
             {
-                NewTaskTitle = string.Empty;
-                NewTaskSelectedCase = null;
-                NewTaskAssignedTo = null;
-                NewTaskDueDate = DateTime.Today.AddDays(7);
+                MessageBox.Show("Task created successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                IsTaskModalOpen = false;
+                ClearForm();
                 LoadTasks();
             }
             else
             {
                 MessageBox.Show("Failed to create task.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ExecuteUpdateTask()
+        {
+            if (SelectedTask == null) return;
+
+            if (string.IsNullOrWhiteSpace(FormTitle) || FormSelectedCase == null || FormAssignedTo == null)
+            {
+                MessageBox.Show("Please fill out all required fields.", "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var updated = new CoreTask
+            {
+                TaskID = SelectedTask.TaskID,
+                CaseID = FormSelectedCase.CaseID,
+                Title = FormTitle,
+                AssignedToID = FormAssignedTo.UserID,
+                DueDate = FormDueDate,
+                Status = FormStatus
+            };
+
+            bool success = _taskService.UpdateTask(updated);
+            if (success)
+            {
+                MessageBox.Show("Task updated successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                IsTaskModalOpen = false;
+                LoadTasks();
+            }
+            else
+            {
+                MessageBox.Show("Failed to update task.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -175,6 +337,10 @@ namespace LawCaseManagement.Wpf.ViewModels
                 {
                     if (_taskService.DeleteTask(t.TaskID))
                     {
+                        if (IsTaskModalOpen && SelectedTask?.TaskID == t.TaskID)
+                        {
+                            IsTaskModalOpen = false;
+                        }
                         LoadTasks();
                     }
                 }

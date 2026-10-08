@@ -5,6 +5,7 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/LightTheme.xaml" />
                 <ResourceDictionary Source="Styles/ThemeResources.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
@@ -12,6 +13,10 @@
             <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter" />
             <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
+            <converters:NotNullToVisibilityConverter x:Key="NotNullToVisibilityConverter" />
+            <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
+            <converters:StatusToChipBackgroundConverter x:Key="StatusToChipBackgroundConverter" />
+            <converters:StatusToChipForegroundConverter x:Key="StatusToChipForegroundConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

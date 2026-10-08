@@ -1,29 +1,33 @@
 <UserControl x:Class="LawCaseManagement.Wpf.Views.AdminView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Background="{StaticResource BackgroundBrush}">
+             Background="{DynamicResource BackgroundBrush}">
     <Grid Margin="24">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Admin Panel" Style="{StaticResource HeaderTextBlockStyle}"/>
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Text="Admin Panel" Style="{DynamicResource PageTitleStyle}"/>
+            <TextBlock Text="System configuration, user accounts, and immutable audit logs" 
+                       Style="{DynamicResource CaptionTextStyle}"/>
+        </StackPanel>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="320"/>
+                <ColumnDefinition Width="340"/>
             </Grid.ColumnDefinitions>
 
             <!-- LEFT: Tabs for Users + Audit Logs -->
-            <TabControl Grid.Column="0" Margin="0,0,8,0" Background="{StaticResource CardBackgroundBrush}"
-                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+            <TabControl Grid.Column="0" Margin="0,0,12,0" Background="{DynamicResource SurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
                 <TabControl.Resources>
                     <Style TargetType="TabItem">
-                        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-                        <Setter Property="Background" Value="{StaticResource SidebarBackgroundBrush}"/>
-                        <Setter Property="Padding" Value="14,6"/>
+                        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+                        <Setter Property="Background" Value="{DynamicResource SurfaceAltBrush}"/>
+                        <Setter Property="Padding" Value="16,8"/>
                         <Setter Property="FontSize" Value="13"/>
                         <Setter Property="FontWeight" Value="SemiBold"/>
                     </Style>
@@ -34,33 +38,45 @@
                     <DataGrid ItemsSource="{Binding UsersList}" SelectedItem="{Binding SelectedUser}"
                               AutoGenerateColumns="False" Margin="0">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Full Name" Binding="{Binding FullName}" Width="*"/>
-                            <DataGridTextColumn Header="Username" Binding="{Binding Username}" Width="120"/>
-                            <DataGridTextColumn Header="Role" Binding="{Binding Role}" Width="100"/>
-                            <DataGridTemplateColumn Header="Status" Width="90">
+                            <DataGridTextColumn Header="FULL NAME" Binding="{Binding FullName}" Width="*"/>
+                            <DataGridTextColumn Header="USERNAME" Binding="{Binding Username}" Width="120"/>
+                            <DataGridTextColumn Header="ROLE" Binding="{Binding Role}" Width="100"/>
+                            <DataGridTemplateColumn Header="STATUS" Width="100">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center" FontWeight="SemiBold">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Text" Value="Active"/>
-                                                    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                                        <Border>
+                                            <Border.Style>
+                                                <Style TargetType="Border" BasedOn="{StaticResource StatusChipBaseStyle}">
+                                                    <Setter Property="Background" Value="{DynamicResource SuccessSoftBrush}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsActive}" Value="False">
-                                                            <Setter Property="Text" Value="Inactive"/>
-                                                            <Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
+                                                            <Setter Property="Background" Value="{DynamicResource ErrorSoftBrush}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
+                                            </Border.Style>
+                                            <TextBlock FontWeight="SemiBold" FontSize="11">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="Active"/>
+                                                        <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                                                <Setter Property="Text" Value="Inactive"/>
+                                                                <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Border>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="" Width="90">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <Button Content="Toggle" Height="24" FontSize="10" Style="{StaticResource SecondaryButtonStyle}"
+                                        <Button Content="Toggle" Height="26" FontSize="11" Style="{DynamicResource SecondaryButtonStyle}"
                                                 Command="{Binding DataContext.ToggleUserActiveCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}"/>
                                     </DataTemplate>
@@ -73,16 +89,23 @@
                 <!-- Audit Log Tab -->
                 <TabItem Header="Audit Logs">
                     <DockPanel>
-                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,8,8,6">
-                            <TextBox Text="{Binding AuditLogSearchQuery, UpdateSourceTrigger=PropertyChanged}" Width="220" Margin="0,0,8,0" ToolTip="Search audit logs..."/>
-                            <Button Content="Search" Command="{Binding SearchLogsCommand}" Width="70"/>
-                        </StackPanel>
-                        <DataGrid ItemsSource="{Binding AuditLogsList}" AutoGenerateColumns="False">
+                        <Border DockPanel.Dock="Top" Background="{DynamicResource SurfaceAltBrush}" Padding="10" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" Text="{Binding AuditLogSearchQuery, UpdateSourceTrigger=PropertyChanged}" 
+                                         Margin="0,0,8,0" Height="34" ToolTip="Search audit logs..."/>
+                                <Button Grid.Column="1" Content="Search" Command="{Binding SearchLogsCommand}" Width="80" Height="34"/>
+                            </Grid>
+                        </Border>
+                        <DataGrid ItemsSource="{Binding AuditLogsList}" AutoGenerateColumns="False" BorderThickness="0">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Time" Binding="{Binding Timestamp, StringFormat='dd/MM/yy HH:mm'}" Width="120"/>
-                                <DataGridTextColumn Header="User" Binding="{Binding User.FullName}" Width="150"/>
-                                <DataGridTextColumn Header="Action" Binding="{Binding Action}" Width="150"/>
-                                <DataGridTextColumn Header="Details" Binding="{Binding Details}" Width="*"/>
+                                <DataGridTextColumn Header="TIMESTAMP" Binding="{Binding Timestamp, StringFormat='dd/MM/yy HH:mm'}" Width="130"/>
+                                <DataGridTextColumn Header="USER" Binding="{Binding User.FullName}" Width="150"/>
+                                <DataGridTextColumn Header="ACTION" Binding="{Binding Action}" Width="150"/>
+                                <DataGridTextColumn Header="DETAILS" Binding="{Binding Details}" Width="*"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>
@@ -90,9 +113,9 @@
             </TabControl>
 
             <!-- RIGHT: Create/Edit User Form -->
-            <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="8,0,0,0">
+            <Border Grid.Column="1" Style="{DynamicResource CardStyle}">
                 <StackPanel>
-                    <TextBlock FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" Margin="0,0,0,14">
+                    <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,16">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Text" Value="Create User Account" />
@@ -105,36 +128,37 @@
                         </TextBlock.Style>
                     </TextBlock>
 
-                    <TextBlock Text="Full Name *" FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,0,4"/>
-                    <TextBox Text="{Binding FormFullName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,10"/>
+                    <TextBlock Text="Full Name *" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                    <TextBox Text="{Binding FormFullName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" Height="34"/>
 
-                    <TextBlock Text="Username *" FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,0,4"/>
-                    <TextBox Text="{Binding FormUsername, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,10"/>
+                    <TextBlock Text="Username *" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                    <TextBox Text="{Binding FormUsername, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" Height="34"/>
 
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                        <TextBlock Text="Password" FontSize="12" Foreground="{StaticResource MutedTextBrush}"/>
-                        <TextBlock Text=" (leave blank to keep)" FontSize="10" Foreground="{StaticResource MutedTextBrush}"
+                        <TextBlock Text="Password" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}"/>
+                        <TextBlock Text=" (leave blank to keep)" FontSize="10" Foreground="{DynamicResource TextSecondaryBrush}"
                                    Visibility="{Binding HasSelectedUser, Converter={StaticResource BooleanToVisibilityConverter}}"
                                    VerticalAlignment="Bottom" Margin="4,0,0,0"/>
                     </StackPanel>
-                    <TextBox Text="{Binding FormPassword, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,10"/>
+                    <TextBox Text="{Binding FormPassword, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12" Height="34"/>
 
-                    <TextBlock Text="Role *" FontSize="12" Foreground="{StaticResource MutedTextBrush}" Margin="0,0,0,4"/>
-                    <ComboBox SelectedValue="{Binding FormRole}" Margin="0,0,0,10">
+                    <TextBlock Text="Role *" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                    <ComboBox SelectedValue="{Binding FormRole}" SelectedValuePath="Content" Margin="0,0,0,14" Height="34">
                         <ComboBoxItem Content="Admin"/>
                         <ComboBoxItem Content="Lawyer"/>
                         <ComboBoxItem Content="Paralegal"/>
                     </ComboBox>
 
-                    <CheckBox Content="Active Account" IsChecked="{Binding FormIsActive}" Foreground="{StaticResource TextBrush}" Margin="0,0,0,16"/>
+                    <CheckBox Content="Active Account" IsChecked="{Binding FormIsActive}" 
+                              Foreground="{DynamicResource TextPrimaryBrush}" FontSize="13" Margin="0,0,0,20"/>
 
-                    <WrapPanel>
-                        <Button Content="➕ Create" Command="{Binding CreateUserCommand}" Margin="0,0,8,0"
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="+ Create" Command="{Binding CreateUserCommand}" Margin="0,0,8,0" Height="36" Padding="14,0"
                                 Visibility="{Binding HasSelectedUser, Converter={StaticResource InverseBooleanToVisibilityConverter}}"/>
-                        <Button Content="✏ Update" Command="{Binding UpdateUserCommand}" Margin="0,0,8,0"
+                        <Button Content="💾 Save" Command="{Binding UpdateUserCommand}" Margin="0,0,8,0" Height="36" Padding="14,0"
                                 Visibility="{Binding HasSelectedUser, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                        <Button Content="Clear" Command="{Binding ClearFormCommand}" Style="{StaticResource SecondaryButtonStyle}"/>
-                    </WrapPanel>
+                        <Button Content="Clear" Command="{Binding ClearFormCommand}" Style="{DynamicResource SecondaryButtonStyle}" Height="36" Padding="14,0"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </Grid>

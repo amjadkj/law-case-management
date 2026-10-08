@@ -1,9 +1,32 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LawCaseManagement.Core
 {
+    // ─── Sync Infrastructure ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Marker interface for entities that participate in offline sync.
+    /// Provides RowVersion for concurrency detection and audit trail for sync.
+    /// </summary>
+    public interface ISyncableEntity
+    {
+        /// <summary>
+        /// SQL Server: mapped to rowversion (auto-incremented binary timestamp).
+        /// SQLite: manually managed as an incrementing integer stored as byte[].
+        /// Used for optimistic concurrency and conflict detection during sync.
+        /// </summary>
+        byte[]? RowVersion { get; set; }
+
+        /// <summary>UTC timestamp of the last modification.</summary>
+        DateTime LastModifiedUtc { get; set; }
+
+        /// <summary>UserID of the person who last modified this record. Null for system/seed operations.</summary>
+        int? LastModifiedByUserId { get; set; }
+    }
+
     // ─── Enums ────────────────────────────────────────────────────────────────
 
     public enum UserRole
@@ -99,7 +122,7 @@ namespace LawCaseManagement.Core
         public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
     }
 
-    public class Case
+    public class Case : ISyncableEntity
     {
         public int CaseID { get; set; }
 
@@ -125,6 +148,12 @@ namespace LawCaseManagement.Core
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        // ── Sync / Concurrency columns ───────────────────────────────────
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+        public DateTime LastModifiedUtc { get; set; } = DateTime.UtcNow;
+        public int? LastModifiedByUserId { get; set; }
+
         // Navigation properties
         public virtual User Lawyer { get; set; } = null!;
         public virtual User Paralegal { get; set; } = null!;
@@ -133,7 +162,7 @@ namespace LawCaseManagement.Core
         public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
     }
 
-    public class Client
+    public class Client : ISyncableEntity
     {
         public int ClientID { get; set; }
 
@@ -151,6 +180,12 @@ namespace LawCaseManagement.Core
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        // ── Sync / Concurrency columns ───────────────────────────────────
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+        public DateTime LastModifiedUtc { get; set; } = DateTime.UtcNow;
+        public int? LastModifiedByUserId { get; set; }
+
         // Navigation properties
         public virtual ICollection<CaseClient> CaseClients { get; set; } = new List<CaseClient>();
     }
@@ -164,7 +199,7 @@ namespace LawCaseManagement.Core
         public virtual Client Client { get; set; } = null!;
     }
 
-    public class Task
+    public class Task : ISyncableEntity
     {
         public int TaskID { get; set; }
         public int CaseID { get; set; }
@@ -180,12 +215,18 @@ namespace LawCaseManagement.Core
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        // ── Sync / Concurrency columns ───────────────────────────────────
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+        public DateTime LastModifiedUtc { get; set; } = DateTime.UtcNow;
+        public int? LastModifiedByUserId { get; set; }
+
         // Navigation properties
         public virtual Case Case { get; set; } = null!;
         public virtual User AssignedTo { get; set; } = null!;
     }
 
-    public class Document
+    public class Document : ISyncableEntity
     {
         public int DocumentID { get; set; }
         public int CaseID { get; set; }
@@ -198,6 +239,12 @@ namespace LawCaseManagement.Core
 
         public int UploadedByID { get; set; }
         public DateTime UploadDate { get; set; } = DateTime.UtcNow;
+
+        // ── Sync / Concurrency columns ───────────────────────────────────
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+        public DateTime LastModifiedUtc { get; set; } = DateTime.UtcNow;
+        public int? LastModifiedByUserId { get; set; }
 
         // Navigation properties
         public virtual Case Case { get; set; } = null!;
@@ -219,5 +266,84 @@ namespace LawCaseManagement.Core
 
         // Navigation properties
         public virtual User? User { get; set; }
+    }
+
+    // ─── Sync Change Log (Offline Change Queue) ──────────────────────────────
+
+    /// <summary>
+    /// Tracks offline changes made to the local SQLite cache.
+    /// Used by the sync service (Phase 3) to push queued changes to SQL Server.
+    /// </summary>
+    public class SyncChangeLog
+    {
+        public int SyncChangeLogID { get; set; }
+
+        /// <summary>Entity type name (e.g., "Case", "Client", "Task", "Document")</summary>
+        [MaxLength(100)]
+        public string EntityType { get; set; } = string.Empty;
+
+        /// <summary>Primary key of the changed record</summary>
+        public int RecordId { get; set; }
+
+        /// <summary>Operation type: "Create", "Update", "Delete"</summary>
+        [MaxLength(20)]
+        public string Operation { get; set; } = string.Empty;
+
+        /// <summary>JSON-serialized payload of the changed entity (for Create/Update)</summary>
+        public string? Payload { get; set; }
+
+        /// <summary>When the change was made locally</summary>
+        public DateTime ChangedAtUtc { get; set; } = DateTime.UtcNow;
+
+        /// <summary>UserID who made the change</summary>
+        public int? ChangedByUserId { get; set; }
+
+        /// <summary>Whether this change has been synced to the server</summary>
+        public bool IsSynced { get; set; } = false;
+
+        /// <summary>When the change was successfully synced (null if pending)</summary>
+        public DateTime? SyncedAtUtc { get; set; }
+
+        /// <summary>Error message if sync failed</summary>
+        [MaxLength(2000)]
+        public string? SyncError { get; set; }
+    }
+
+    // ─── Sync Conflict Record ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Records a conflict detected during sync when the server version has
+    /// diverged from the local cached version. Admins review and resolve.
+    /// </summary>
+    public class SyncConflict
+    {
+        public int SyncConflictID { get; set; }
+
+        [MaxLength(100)]
+        public string EntityType { get; set; } = string.Empty;
+
+        public int RecordId { get; set; }
+
+        /// <summary>JSON-serialized local (offline) version of the record</summary>
+        public string? LocalPayload { get; set; }
+
+        /// <summary>JSON-serialized server version of the record</summary>
+        public string? ServerPayload { get; set; }
+
+        /// <summary>When the conflict was detected</summary>
+        public DateTime DetectedAtUtc { get; set; } = DateTime.UtcNow;
+
+        /// <summary>Resolution: null = unresolved, "KeepServer", "KeepLocal", "Merged"</summary>
+        [MaxLength(50)]
+        public string? Resolution { get; set; }
+
+        /// <summary>UserID of the admin who resolved the conflict</summary>
+        public int? ResolvedByUserId { get; set; }
+
+        /// <summary>When the conflict was resolved</summary>
+        public DateTime? ResolvedAtUtc { get; set; }
+
+        /// <summary>JSON payload of the merged result (if Resolution = "Merged")</summary>
+        public string? MergedPayload { get; set; }
     }
 }

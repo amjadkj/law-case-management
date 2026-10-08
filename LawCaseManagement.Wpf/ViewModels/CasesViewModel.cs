@@ -24,6 +24,14 @@ namespace LawCaseManagement.Wpf.ViewModels
         private string _searchQuery = string.Empty;
         private string _statusFilter = "All";
         private string _typeFilter = "All";
+        private User? _selectedLawyerFilter;
+        private User? _selectedParalegalFilter;
+
+        // Modal states (§2.7)
+        private bool _isCaseModalOpen;
+        private bool _isFilterModalOpen;
+        private bool _isEditMode;
+        private bool _hasConflict;
 
         // For Creation / Editing Form
         private string _formFileNumber = string.Empty;
@@ -41,6 +49,7 @@ namespace LawCaseManagement.Wpf.ViewModels
         private DateTime _formOpenDate = DateTime.Today;
         private DateTime? _formCloseDate;
 
+        public bool IsAdmin => AuthService.CurrentUser?.Role == Roles.Admin;
         public bool IsAdminOrLawyer => AuthService.CurrentUser?.Role == Roles.Admin || AuthService.CurrentUser?.Role == Roles.Lawyer;
 
         public ObservableCollection<Case> CasesList { get; } = new ObservableCollection<Case>();
@@ -49,6 +58,8 @@ namespace LawCaseManagement.Wpf.ViewModels
         public ObservableCollection<User> AllStaffList { get; } = new ObservableCollection<User>();
         public ObservableCollection<Client> AllClientsList { get; } = new ObservableCollection<Client>();
         public ObservableCollection<Client> LinkedClientsForForm { get; } = new ObservableCollection<Client>();
+        public ObservableCollection<Document> CaseDocuments { get; } = new ObservableCollection<Document>();
+        public ObservableCollection<CoreTask> CaseTasks { get; } = new ObservableCollection<CoreTask>();
 
         public Case? SelectedCase
         {
@@ -65,23 +76,115 @@ namespace LawCaseManagement.Wpf.ViewModels
 
         public bool HasSelectedCase => SelectedCase != null;
 
+        // Modals & Banners
+        public bool IsCaseModalOpen
+        {
+            get => _isCaseModalOpen;
+            set => SetProperty(ref _isCaseModalOpen, value);
+        }
+
+        public bool IsFilterModalOpen
+        {
+            get => _isFilterModalOpen;
+            set => SetProperty(ref _isFilterModalOpen, value);
+        }
+
+        public bool IsEditMode
+        {
+            get => _isEditMode;
+            set
+            {
+                if (SetProperty(ref _isEditMode, value))
+                {
+                    OnPropertyChanged(nameof(ModalTitle));
+                    OnPropertyChanged(nameof(SaveButtonText));
+                }
+            }
+        }
+
+        public string ModalTitle => IsEditMode ? $"Case Details: {FormFileNumber}" : "New Case";
+        public string SaveButtonText => IsEditMode ? "Save Changes" : "Create Case";
+
+        public bool HasConflict
+        {
+            get => _hasConflict;
+            set
+            {
+                if (SetProperty(ref _hasConflict, value))
+                {
+                    OnPropertyChanged(nameof(ShowConflictBanner));
+                }
+            }
+        }
+
+        public bool ShowConflictBanner => HasConflict && IsAdmin;
+
+        // Scoped Search & Filter (§2.5)
         public string SearchQuery
         {
             get => _searchQuery;
-            set => SetProperty(ref _searchQuery, value);
+            set
+            {
+                if (SetProperty(ref _searchQuery, value))
+                {
+                    LoadCases();
+                }
+            }
         }
 
         public string StatusFilter
         {
             get => _statusFilter;
-            set => SetProperty(ref _statusFilter, value);
+            set
+            {
+                if (SetProperty(ref _statusFilter, value))
+                {
+                    OnPropertyChanged(nameof(HasActiveFilters));
+                }
+            }
         }
 
         public string TypeFilter
         {
             get => _typeFilter;
-            set => SetProperty(ref _typeFilter, value);
+            set
+            {
+                if (SetProperty(ref _typeFilter, value))
+                {
+                    OnPropertyChanged(nameof(HasActiveFilters));
+                }
+            }
         }
+
+        public User? SelectedLawyerFilter
+        {
+            get => _selectedLawyerFilter;
+            set
+            {
+                if (SetProperty(ref _selectedLawyerFilter, value))
+                {
+                    OnPropertyChanged(nameof(HasActiveFilters));
+                }
+            }
+        }
+
+        public User? SelectedParalegalFilter
+        {
+            get => _selectedParalegalFilter;
+            set
+            {
+                if (SetProperty(ref _selectedParalegalFilter, value))
+                {
+                    OnPropertyChanged(nameof(HasActiveFilters));
+                }
+            }
+        }
+
+        public bool HasActiveFilters => 
+            (StatusFilter != "All" && !string.IsNullOrEmpty(StatusFilter)) ||
+            (TypeFilter != "All" && !string.IsNullOrEmpty(TypeFilter)) ||
+            SelectedLawyerFilter != null ||
+            SelectedParalegalFilter != null;
 
         // Form bindings
         public string FormFileNumber { get => _formFileNumber; set => SetProperty(ref _formFileNumber, value); }
@@ -100,11 +203,15 @@ namespace LawCaseManagement.Wpf.ViewModels
         public User? FormNewTaskAssignedTo { get => _formNewTaskAssignedTo; set => SetProperty(ref _formNewTaskAssignedTo, value); }
         public DateTime FormNewTaskDueDate { get => _formNewTaskDueDate; set => SetProperty(ref _formNewTaskDueDate, value); }
 
+        // Commands
         public ICommand SearchCommand { get; }
+        public ICommand ToggleFilterModalCommand { get; }
+        public ICommand ApplyFiltersCommand { get; }
         public ICommand ClearFiltersCommand { get; }
+        public ICommand OpenCreateModalCommand { get; }
+        public ICommand CloseCaseModalCommand { get; }
+        public ICommand SaveCaseCommand { get; }
         public ICommand AutoGenerateFileNumberCommand { get; }
-        public ICommand CreateCaseCommand { get; }
-        public ICommand UpdateCaseCommand { get; }
         public ICommand AddClientToLinkFormCommand { get; }
         public ICommand RemoveClientFromLinkFormCommand { get; }
         
@@ -129,12 +236,17 @@ namespace LawCaseManagement.Wpf.ViewModels
             _documentService = documentService ?? new DocumentService(contextFactory);
 
             SearchCommand = new RelayCommand(LoadCases);
+            ToggleFilterModalCommand = new RelayCommand(() => IsFilterModalOpen = !IsFilterModalOpen);
+            ApplyFiltersCommand = new RelayCommand(() => { IsFilterModalOpen = false; LoadCases(); });
             ClearFiltersCommand = new RelayCommand(ResetFilters);
+
+            OpenCreateModalCommand = new RelayCommand(OpenCreateModal);
+            CloseCaseModalCommand = new RelayCommand(() => IsCaseModalOpen = false);
+            SaveCaseCommand = new RelayCommand(ExecuteSaveCase);
+
             AutoGenerateFileNumberCommand = new RelayCommand(ExecuteAutoGenerateFileNumber);
             AddClientToLinkFormCommand = new RelayCommand(AddClientToForm);
             RemoveClientFromLinkFormCommand = new RelayCommand(RemoveClientFromForm);
-            CreateCaseCommand = new RelayCommand(ExecuteCreateCase);
-            UpdateCaseCommand = new RelayCommand(ExecuteUpdateCase);
 
             UploadDocumentCommand = new RelayCommand(ExecuteUploadDocument);
             OpenDocumentCommand = new RelayCommand(ExecuteOpenDocument);
@@ -152,13 +264,13 @@ namespace LawCaseManagement.Wpf.ViewModels
         {
             using var db = CreateDbContext();
             LawyersList.Clear();
-            foreach (var user in db.Users.Where(u => u.Role == Roles.Lawyer && u.IsActive).ToList())
+            foreach (var user in db.Users.Where(u => u.Role == Roles.Lawyer && u.IsActive).OrderBy(u => u.FullName).ToList())
             {
                 LawyersList.Add(user);
             }
 
             ParalegalsList.Clear();
-            foreach (var user in db.Users.Where(u => u.Role == Roles.Paralegal && u.IsActive).ToList())
+            foreach (var user in db.Users.Where(u => u.Role == Roles.Paralegal && u.IsActive).OrderBy(u => u.FullName).ToList())
             {
                 ParalegalsList.Add(user);
             }
@@ -176,6 +288,23 @@ namespace LawCaseManagement.Wpf.ViewModels
             }
         }
 
+        public void OpenCreateModal()
+        {
+            ClearForm();
+            IsEditMode = false;
+            HasConflict = false;
+            SelectedCase = null;
+            ExecuteAutoGenerateFileNumber();
+            IsCaseModalOpen = true;
+        }
+
+        public void OpenEditModal(Case c)
+        {
+            SelectedCase = c;
+            IsEditMode = true;
+            IsCaseModalOpen = true;
+        }
+
         private void ExecuteAutoGenerateFileNumber()
         {
             FormFileNumber = _caseService.GenerateNextFileNumber();
@@ -184,6 +313,17 @@ namespace LawCaseManagement.Wpf.ViewModels
         public void LoadCases()
         {
             var list = _caseService.GetCases(SearchQuery, StatusFilter, TypeFilter);
+            
+            // Apply additional in-memory or helper filters if lawyer/paralegal selected
+            if (SelectedLawyerFilter != null)
+            {
+                list = list.Where(c => c.LawyerID == SelectedLawyerFilter.UserID).ToList();
+            }
+            if (SelectedParalegalFilter != null)
+            {
+                list = list.Where(c => c.ParalegalID == SelectedParalegalFilter.UserID).ToList();
+            }
+
             CasesList.Clear();
             foreach (var c in list)
             {
@@ -196,6 +336,9 @@ namespace LawCaseManagement.Wpf.ViewModels
             SearchQuery = string.Empty;
             StatusFilter = "All";
             TypeFilter = "All";
+            SelectedLawyerFilter = null;
+            SelectedParalegalFilter = null;
+            IsFilterModalOpen = false;
             LoadCases();
         }
 
@@ -226,6 +369,18 @@ namespace LawCaseManagement.Wpf.ViewModels
             }
         }
 
+        private void ExecuteSaveCase()
+        {
+            if (IsEditMode)
+            {
+                ExecuteUpdateCase();
+            }
+            else
+            {
+                ExecuteCreateCase();
+            }
+        }
+
         private void ExecuteCreateCase()
         {
             if (string.IsNullOrWhiteSpace(FormFileNumber) || string.IsNullOrWhiteSpace(FormTitle) ||
@@ -244,7 +399,7 @@ namespace LawCaseManagement.Wpf.ViewModels
                 Notes = FormNotes,
                 LawyerID = FormSelectedLawyer.UserID,
                 ParalegalID = FormSelectedParalegal.UserID,
-                OpenDate = DateTime.Today
+                OpenDate = FormOpenDate
             };
 
             var clientIds = LinkedClientsForForm.Select(c => c.ClientID).ToList();
@@ -253,6 +408,7 @@ namespace LawCaseManagement.Wpf.ViewModels
             if (success)
             {
                 MessageBox.Show("Case file created successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                IsCaseModalOpen = false;
                 ClearForm();
                 LoadCases();
             }
@@ -291,8 +447,8 @@ namespace LawCaseManagement.Wpf.ViewModels
             if (success)
             {
                 MessageBox.Show("Case file updated successfully.", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                IsCaseModalOpen = false;
                 LoadCases();
-                SelectedCase = _caseService.GetCaseById(SelectedCase.CaseID); // reload details
             }
             else
             {
@@ -305,6 +461,9 @@ namespace LawCaseManagement.Wpf.ViewModels
             if (SelectedCase == null)
             {
                 ClearForm();
+                CaseDocuments.Clear();
+                CaseTasks.Clear();
+                HasConflict = false;
                 return;
             }
 
@@ -312,6 +471,9 @@ namespace LawCaseManagement.Wpf.ViewModels
             if (details == null)
             {
                 ClearForm();
+                CaseDocuments.Clear();
+                CaseTasks.Clear();
+                HasConflict = false;
                 return;
             }
 
@@ -320,13 +482,41 @@ namespace LawCaseManagement.Wpf.ViewModels
             FormCaseType = details.CaseType;
             FormStatus = details.Status;
             FormNotes = details.Notes;
+            FormOpenDate = details.OpenDate;
+            FormCloseDate = details.CloseDate;
             FormSelectedLawyer = LawyersList.FirstOrDefault(l => l.UserID == details.LawyerID);
             FormSelectedParalegal = ParalegalsList.FirstOrDefault(p => p.UserID == details.ParalegalID);
 
             LinkedClientsForForm.Clear();
             foreach (var cc in details.CaseClients)
             {
-                LinkedClientsForForm.Add(cc.Client);
+                if (cc.Client != null)
+                {
+                    LinkedClientsForForm.Add(cc.Client);
+                }
+            }
+
+            CaseDocuments.Clear();
+            foreach (var doc in details.Documents)
+            {
+                CaseDocuments.Add(doc);
+            }
+
+            CaseTasks.Clear();
+            foreach (var task in details.Tasks)
+            {
+                CaseTasks.Add(task);
+            }
+
+            // Check for conflict record in DB (§3.3)
+            try
+            {
+                using var db = CreateDbContext();
+                HasConflict = db.SyncConflicts.Any(sc => sc.EntityType == "Case" && sc.RecordId == details.CaseID && sc.Resolution == null);
+            }
+            catch
+            {
+                HasConflict = false;
             }
         }
 
@@ -337,9 +527,13 @@ namespace LawCaseManagement.Wpf.ViewModels
             FormCaseType = CaseTypes.Civil;
             FormStatus = CaseStatuses.Open;
             FormNotes = string.Empty;
+            FormOpenDate = DateTime.Today;
+            FormCloseDate = null;
             FormSelectedLawyer = null;
             FormSelectedParalegal = null;
             LinkedClientsForForm.Clear();
+            CaseDocuments.Clear();
+            CaseTasks.Clear();
         }
 
         private void ExecuteUploadDocument()

@@ -359,7 +359,7 @@ namespace LawCaseManagement.Core
         public List<Client> GetClients(string? searchQuery = null)
         {
             using var db = CreateDbContext();
-            var query = db.Clients.AsQueryable();
+            var query = db.Clients.Include(c => c.CaseClients).AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(searchQuery))
             {
